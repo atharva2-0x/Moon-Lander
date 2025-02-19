@@ -79,7 +79,7 @@ class ReplayMemory(object):
 
   def sample(self, batch_size):
     experiences = random.sample(self.memory, k = batch_size)
-    states = torch.from_numpy(np.vstack([e[0] for e in experiences if e is not None])).float().to(self.device)
+    states = torch.from_numpy(np.vstack([e[0] for e in experiences if e is not None])).float().to(self.device)            # stack up states from experience
     actions = torch.from_numpy(np.vstack([e[1] for e in experiences if e is not None])).long().to(self.device)
     rewards = torch.from_numpy(np.vstack([e[2] for e in experiences if e is not None])).float().to(self.device)
     next_states = torch.from_numpy(np.vstack([e[3] for e in experiences if e is not None])).float().to(self.device)
@@ -100,28 +100,28 @@ class Agent():
     self.memory = ReplayMemory(replay_buffer_size)
     self.t_step = 0
 
-  def step(self, state, action, reward, next_state, done):
+  def step(self, state, action, reward, next_state, done):                 # learn at every 4th step 
     self.memory.push((state, action, reward, next_state, done))
     self.t_step = (self.t_step + 1) % 4
     if self.t_step == 0:
-      if len(self.memory.memory) > minibatch_size:
-        experiences = self.memory.sample(100)
+      if len(self.memory.memory) > minibatch_size:                          # minibatch = 100
+        experiences = self.memory.sample(100)                               # 100 random samples from memory
         self.learn(experiences, discount_factor)
 
-  def act(self, state, epsilon = 0.):
-    state = torch.from_numpy(state).float().unsqueeze(0).to(self.device)
-    self.local_qnetwork.eval()
-    with torch.no_grad():
-      action_values = self.local_qnetwork(state)
-    self.local_qnetwork.train()
-    if random.random() > epsilon:
+  def act(self, state, epsilon = 0.):                                       # will select an action based on given state # with greedy action selection policy
+    state = torch.from_numpy(state).float().unsqueeze(0).to(self.device)    # creating a new dimention for storing batch
+    self.local_qnetwork.eval()                                              # setting to evalution mode
+    with torch.no_grad():                                                   # we are in inference mode to predict
+      action_values = self.local_qnetwork(state)                            # predicting action (q_value) based on state 
+    self.local_qnetwork.train()                                             # Back to training mode 
+    if random.random() > epsilon:                                           # epsilon action selection policy   
       return np.argmax(action_values.cpu().data.numpy())
     else:
       return random.choice(np.arange(self.action_size))
 
   def learn(self, experiences, discount_factor):           # performs training by backpropagating loss between expected q-values and target q-values and target q-values are calculated using target network
     states, next_states, actions, rewards, dones = experiences
-    next_q_targets = self.target_qnetwork(next_states).detach().max(1)[0].unsqueeze(1)
+    next_q_targets = self.target_qnetwork(next_states).detach().max(1)[0].unsqueeze(1)  # max predicted q_value
     q_targets = rewards + discount_factor * next_q_targets * (1 - dones)
     q_expected = self.local_qnetwork(states).gather(1, actions)
     loss = F.mse_loss(q_expected, q_targets)
